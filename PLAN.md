@@ -150,3 +150,38 @@ Expected: System returns relevant Slack messages + Fathom transcript snippets wi
 - [ ] Design information architecture for multi-source results
 - [ ] Prototype Google Drive integration
 - [ ] Create demo data set for testing
+
+## Rationale and Implementation Notes
+
+Chosen stack and packaging
+- Backend uses FastAPI + Pydantic to get typed request/response models, async handlers, and a mature test client. This mirrors existing Savas FastAPI use (see CLAUDE.md), keeps the mental model consistent, and speeds iteration for RAG-style backends.
+- Dependencies are intentionally minimal in `pyproject.toml` (FastAPI, httpx, pydantic, uvicorn, pytest, anyio, python-multipart) to respect the “prefer minimal libraries” guidance. Editable install and a local virtualenv avoid macOS system Python constraints (PEP 668) while keeping the feedback loop fast.
+
+Data/storage abstractions (why stubs now, swap later)
+- In-memory repo and queue mirror the shapes we need for Postgres+pgvector and SQS/PubSub but avoid infra during early validation. They expose the same CRUD and search boundaries so swapping to real storage does not change the API layer.
+- Stub embeddings are deterministic hash-based vectors: zero cost, deterministic tests, and no network calls. The interface is intentionally thin so we can drop in OpenAI embeddings later without touching callers.
+- A single seeded Slack document/chunk is loaded at startup to make the POC return something immediately without external data. This is deliberate scaffolding, not production data.
+
+Ingestion design
+- Webhook-first ingestion for Fathom matches the requirement that transcripts must be processed automatically when a call completes. FastAPI’s `/webhooks/fathom/call-completed` validates a signature/bearer token (depending on how Fathom delivers auth) and immediately enqueues work to decouple ingestion latency.
+- BackgroundTasks stand in for a real queue + worker (e.g., SQS + Fargate). The worker path (fetch, chunk, embed, persist, alert) is isolated so we can plug a real queue with minimal change.
+- Chunking (`chunker.py`) groups by character budget while retaining speaker and timing. This preserves evidence for search snippets and supplies context for alerts (e.g., who said it, when).
+- Inline `transcript_url` (`inline://...`) keeps local/offline testing simple while using the same code path that will handle signed URLs from Fathom.
+
+Search and retrieval
+- The target retrieval approach is hybrid (BM25 + vector + RRF) with an optional rerank layer; the current implementation is simplified but keeps the API contract (`/search`, filters, rerank flag) intact. That contract stability lets us upgrade the internals (pgvector + Postgres tsvector or OpenSearch) without breaking clients.
+- ACL enforcement is threaded through the repository interface (viewer email, allowed principals per document) so access control will survive the swap to real storage.
+
+Alerts
+- Phase 1 uses explicit keyword rules (budget, schedule, satisfaction, opportunity) per `docs/alerts_rules.md`. This is intentional: cheap, deterministic, and inspectable, giving us fast signal with no model training. The scoring API returns structured alert objects so a later classifier can replace the rules without changing consumers.
+
+Surfaces and auth
+- Slack slash command is the primary UX in POC because it meets users where they work and requires no new UI. Signature verification follows Slack’s v0 spec. The handler passes viewer identity (email/user) to search to support ACLs.
+- Minimal web UI (`/ui`) exists for manual demos and debugging without Slack setup. It is intentionally bare to minimize surface area until we add OAuth/SSO and richer filtering.
+
+Testing and determinism
+- Pytest suite covers health, webhook signature + ingest, alert generation, and search. Inline transcripts keep tests self-contained and deterministic (no network calls, no flaky embeddings).
+- Deterministic stub embeddings ensure stable scores in tests and demos; once real embeddings are enabled, we can pin fixtures or snapshot responses to keep tests reliable.
+
+Documentation footprint
+- Dedicated docs (`docs/fathom_integration.md`, `ingestion_pipeline.md`, `search_api.md`, `alerts_rules.md`, `ui_surfaces.md`) keep rationale close to code and align with CLAUDE.md’s preference for consolidated, longer docs rather than scattered notes.
