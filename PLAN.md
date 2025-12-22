@@ -309,6 +309,203 @@ New Fathom Transcript (webhook)
 - Respect source permissions (private Slack channels stay private)
 - Audit logging for sensitive queries
 
+## Architecture Decision Rationale
+
+This section explains why specific technical choices were made for the POC implementation.
+
+### Project Structure: `src/` Layout with Separate Modules
+
+**Decision:** Organized code into `src/savas_kb/` with subpackages for ingestion, storage, search, alerts, and api.
+
+**Why:**
+- **Separation of concerns** - Each module has a single responsibility. Ingestion knows how to load data, storage knows how to persist it, search knows how to query it. When you want to change how Slack data is loaded, you only touch `ingestion/slack_loader.py`.
+- **Testability** - Isolated modules are easier to unit test. The alert detector can be tested without needing a real database or API keys.
+- **Swappability** - The `storage/` module abstracts ChromaDB behind a `ChromaStore` class. If Pinecone becomes preferable later, create `pinecone_store.py` implementing the same interface, and nothing else changes.
+- **`src/` layout** - This is the modern Python convention (PEP 517/518). It prevents accidental imports from the project root and makes the package installable.
+
+### ChromaDB for Vector Storage
+
+**Decision:** Used ChromaDB as the vector database for the POC.
+
+**Why:**
+- **Zero infrastructure** - ChromaDB runs embedded, storing data in a local directory. No Docker, no server process, no cloud account needed. Start building immediately.
+- **Python-native** - It's a Python library, not a service. Fewer moving parts = fewer things to debug.
+- **Good enough for POC scale** - For hundreds of thousands of chunks (which is what you'd have with 700K Slack messages grouped into threads), ChromaDB performs fine. It uses HNSW indexing which is fast for approximate nearest neighbor search.
+- **Easy to swap later** - Wrapped in `ChromaStore` class with simple interface: `add_chunks()`, `search()`, `get_chunk()`. When you outgrow it, implement the same methods for Pinecone/Weaviate/pgvector.
+
+**Tradeoffs accepted:**
+- No built-in hybrid search (BM25 + semantic). Would need another library if keyword matching becomes important.
+- Single-machine only. For team access, need to run the API on a server or switch to cloud-hosted solution.
+
+### OpenAI Embeddings via API (Not Local)
+
+**Decision:** Used OpenAI's `text-embedding-3-small` model via API rather than local embeddings.
+
+**Why:**
+- **Quality** - OpenAI's embeddings are among the best for retrieval tasks. Local models like `all-MiniLM-L6-v2` are good but not as accurate for nuanced semantic search.
+- **Simplicity** - No GPU required, no model downloading, no managing inference. Just an API call.
+- **Cost is low** - `text-embedding-3-small` costs $0.00002 per 1K tokens. For 700K Slack messages averaging 50 tokens each, that's 35M tokens = ~$0.70 total. Negligible.
+- **Existing infrastructure** - OpenAI keys already in use for other Savas projects.
+
+**Tradeoffs accepted:**
+- Requires internet connection and API key
+- Slight latency on each embedding call (mitigated by batching)
+- Vendor dependency
+
+**Why not local embeddings?**
+- Setup friction (downloading models, managing CUDA/MPS)
+- Lower quality for the use case (finding "decisions made" or "approaches taken" requires nuanced understanding)
+- Cost minimization isn't the goal - getting value quickly is
+
+### Chunking Strategy: Thread-Based for Slack, Speaker-Turn for Fathom
+
+**Decision:** Group Slack messages by thread into single chunks. Split Fathom transcripts by speaker turns.
+
+**Why this matters:**
+- **Context preservation** - A single Slack message like "Yes, let's do that" is meaningless without the thread context. By grouping threads, the chunk becomes "Alice: Should we use React? Bob: Yes, let's do that" - now searchable and meaningful.
+- **Retrieval quality** - If someone searches "What did we decide about React?", the chunk with the full thread discussion will rank higher than isolated messages.
+
+**For Slack specifically:**
+- Threads are natural conversation units
+- Including channel name in the chunk (`[#engineering] Alice: ...`) adds context for filtering and understanding
+- Max chunk size of 2000 chars prevents any single chunk from dominating
+
+**For Fathom specifically:**
+- Speaker turns preserve who said what - critical for alerts ("Client mentioned budget concerns")
+- Meeting title is prepended to each chunk for context
+- Overlap between chunks (optional) ensures context isn't lost at boundaries
+
+**Tradeoffs:**
+- Very long threads become truncated (2000 char limit)
+- Some standalone messages get indexed individually (might lack context)
+
+### Hybrid Search (Planned but Not Fully Implemented)
+
+**What's in the architecture:** Semantic search + keyword matching with Reciprocal Rank Fusion.
+
+**What's built:** Semantic search only (ChromaDB vector similarity).
+
+**Why the gap:**
+- **POC pragmatism** - Pure semantic search works well enough to validate the concept. Adding BM25 requires another library (like `rank_bm25`) and a merge step.
+- **Easy to add later** - The `SearchEngine` class has a clear place to add keyword search. The architecture supports it.
+
+**When hybrid becomes important:**
+- Searching for exact project codes like "RIF-2024-01"
+- Finding messages containing specific technical terms
+- Queries where exact keyword match is more important than semantic meaning
+
+### LLM for Response Generation (RAG Pattern)
+
+**Decision:** Use GPT-4o-mini to synthesize answers from retrieved chunks, with source citations.
+
+**Why:**
+- **User experience** - Instead of returning raw chunks and making users read through them, the LLM synthesizes a coherent answer. "Here's what I found about RIF technologies: React, Drupal, and PostgreSQL were used [Source 1, 2]"
+- **GPT-4o-mini specifically** - Fast, cheap ($0.15/1M input tokens), and capable enough for summarization. Full GPT-4 would be overkill and slow.
+- **Temperature 0.3** - Low temperature keeps responses factual and grounded in the sources. Higher temperature would add creativity we don't want.
+- **Source citations** - The prompt explicitly asks the LLM to cite sources. This builds trust and lets users verify.
+
+**Prompt constraints:**
+```
+"Answer the question using ONLY the provided context"
+"Cite your sources by referring to [Source N]"
+"If the context doesn't contain enough information, say so honestly"
+```
+
+This constrains the LLM to be a faithful summarizer, not a creative writer.
+
+### Alert Detection: Keyword Patterns + LLM Classification
+
+**Decision:** Two-tier detection - fast keyword regex first, then optional LLM classification.
+
+**Why two tiers:**
+- **Keywords are fast and cheap** - Regex matching is instant and free. For obvious signals like "budget concern" or "behind schedule", no LLM needed.
+- **LLM catches nuance** - "We might need to revisit the timeline" doesn't match "behind schedule" but an LLM understands it's a schedule risk.
+- **Configurable** - `use_llm=False` for speed, `use_llm=True` for accuracy. Tune based on false positive/negative rates.
+
+**Keyword pattern design:**
+```python
+r"\bbudget\b.*\b(concern|issue|problem|tight|over|exceed)"
+```
+
+These are regex patterns, not simple string matches. `\b` ensures word boundaries (so "budget" doesn't match "budgetary" accidentally). The `.*` allows words between.
+
+**Tradeoffs:**
+- Keyword patterns need tuning based on real data (some will be too aggressive, some will miss signals)
+- LLM classification adds latency and cost (but only runs on flagged content)
+
+### Slack Notifier with Rich Formatting
+
+**Decision:** Post alerts as Slack Block Kit messages with headers, sections, and context.
+
+**Why:**
+- **Scannability** - Color-coded (red for risk, green for opportunity), emoji indicators, clear sections
+- **Actionability** - Includes the relevant quote, meeting link, and attendees so you can act without digging
+- **Tagging** - Tags @chris (configurable) so alerts don't get lost
+
+**Dry-run mode:** If `SLACK_BOT_TOKEN` isn't set, it prints to console instead of posting. This enables development and testing without spamming Slack.
+
+### CLI with Subcommands
+
+**Decision:** Built a CLI using argparse with subcommands (`ingest`, `search`, `sales-prep`, `1on1`, `alerts`, `stats`, `clear`).
+
+**Why:**
+- **Developer-friendly** - While building and testing, you don't want to spin up a web server. CLI lets you quickly ingest data, run queries, check stats.
+- **Scriptable** - Can be called from cron jobs, CI/CD, or other scripts
+- **Self-documenting** - `savas-kb --help` shows all commands; each command has its own help
+
+**Why argparse over Click/Typer:** Zero dependencies - argparse is stdlib. Good enough for this use case.
+
+### FastAPI for the Web API
+
+**Decision:** Used FastAPI with Pydantic models for request/response validation.
+
+**Why FastAPI:**
+- **Automatic OpenAPI docs** - Visit `/docs` and you get interactive API documentation for free
+- **Pydantic integration** - Request bodies are validated automatically. If someone sends `{"query": 123}` instead of a string, they get a clear error.
+- **Async-ready** - Although sync code is used for simplicity, FastAPI supports async handlers when needed
+- **Fast** - It's in the name, and it matters for a search API
+
+**CORS configuration:** `allow_origins=["http://localhost:3000", "http://localhost:5173"]` allows React frontend (Vite on 5173, or CRA on 3000) to call the API during development.
+
+### Pydantic Models for All Data
+
+**Decision:** Every data structure is a Pydantic BaseModel.
+
+**Why:**
+- **Validation** - When loading Slack exports, if a message is missing `ts`, Pydantic catches it immediately with a clear error
+- **Serialization** - Converting to/from JSON, dict, API responses is automatic
+- **Type hints** - IDE autocomplete works, and bugs are caught at write-time not runtime
+- **Documentation** - Each field has a description, which shows up in API docs
+
+### Configuration via Environment Variables
+
+**Decision:** All configuration comes from `.env` file or environment variables, with sensible defaults.
+
+**Why:**
+- **12-factor app principle** - Config should be separate from code
+- **Easy deployment switching** - Same code runs locally and in production; only the env vars change
+- **Secret management** - API keys never go in code
+- **Defaults where sensible** - `EMBEDDING_MODEL=text-embedding-3-small` is a reasonable default; only override if there's a reason
+
+### Tests That Don't Require API Keys
+
+**Decision:** Unit tests for models and keyword-based alert detection; no tests requiring OpenAI/Slack.
+
+**Why:**
+- **CI-friendly** - Tests can run in any environment without secrets
+- **Fast** - No network calls = tests run in under a second
+- **Focused** - Testing the logic, not the external services
+
+**Not tested yet:** Integration tests with real embeddings, end-to-end tests with actual search. These would need fixtures or mocking, to be added as the codebase matures.
+
+### Guiding Principles Summary
+
+1. **Start simple, make it swappable** - ChromaDB is easy to start with; the abstraction layer lets you swap it later.
+2. **Optimize for developer velocity** - CLI, local storage, no infrastructure = fast iteration.
+3. **Use proven tools** - OpenAI embeddings, Pydantic, FastAPI are all battle-tested. No experimental libraries.
+4. **Make the happy path obvious** - Copy `.env.example`, add key, ingest, search. Minimal steps to value.
+5. **Leave room to grow** - The architecture supports adding more data sources, better search, more alert types without rewrites.
+
 ## MVP Scope
 
 **POC: Slack + Fathom**
