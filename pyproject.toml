@@ -1,0 +1,42 @@
+[project]
+name = "savas-kb"
+version = "0.1.0"
+description = "Multi-source knowledge base with semantic search across Slack, Fathom, and more"
+readme = "PLAN.md"
+requires-python = ">=3.10"
+dependencies = [
+    "chromadb>=1.3.7",
+    "fastapi>=0.127.0",
+    "httpx>=0.28.1",
+    "openai>=2.14.0",
+    "pydantic>=2.12.5",
+    "python-dotenv>=1.2.1",
+    "slack-sdk>=3.39.0",
+    "uvicorn>=0.40.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+]
+
+[project.scripts]
+savas-kb = "savas_kb.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/savas_kb"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+]
