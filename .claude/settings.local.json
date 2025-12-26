@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /Users/chris/web/savas-things/AI/projects/multi-source-knowledge-base log --oneline -10)",
+      "Bash(cat:*)",
+      "Bash(grep:*)",
+      "Bash(curl:*)",
+      "WebFetch(domain:help.fathom.video)",
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "Bash(uv run python:*)",
+      "Bash(gh auth status:*)",
+      "Bash(gh repo list:*)",
+      "Bash(uv run:*)",
+      "Bash(shuf:*)",
+      "Bash(python3:*)",
+      "Bash(__NEW_LINE__ echo \"\")",
+      "Bash(\"https://savaslabs.teamwork.com/posts.json?pageSize=500\")",
+      "Bash(\"https://savaslabs.teamwork.com/time_entries.json?pageSize=500\")",
+      "Bash(\"https://api.harvestapp.com/v2/projects?per_page=100\")",
+      "Bash(\"https://api.harvestapp.com/v2/time_entries?per_page=1\")",
+      "Bash(\"https://api.harvestapp.com/v2/clients?per_page=100\")",
+      "Bash(\"https://savaslabs.teamwork.com/me.json\")",
+      "Bash(fi)",
+      "Bash(# Try last 10 projects \\(older, more likely to have tasks\\) echo \"\"Trying older projects...\"\" curl -s -u \"\"twp_dlSkAEBpa0r3INq1vEgVAKa45oEY:x\"\" \\\\ \"\"https://savaslabs.teamwork.com/projects.json\"\")",
+      "Bash(# The first project returned 70 tasks earlier - let''s check the Parliament project curl -s -u \"\"twp_dlSkAEBpa0r3INq1vEgVAKa45oEY:x\"\" \\\\ \"\"https://savaslabs.teamwork.com/projects.json\"\")",
+      "Bash(xargs:*)",
+      "Bash(uv sync:*)",
+      "Bash(source:*)"
+    ]
+  }
+}

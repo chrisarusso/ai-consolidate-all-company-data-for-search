@@ -1,11 +1,54 @@
 # Multi-Source Knowledge Base (Savas Unified Search)
 
-**Status:** Planning
-**Last Updated:** 2025-12-21
+**Status:** Data Loaders Complete - Ready for Architecture Planning
+**Last Updated:** 2025-12-26
 
 ## Overview
 
 Unified search interface across all Savas company data sources. Semantic search + conversational interface + automated triggers.
+
+---
+
+## Implementation Status
+
+### What's Working ✅
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| **Slack loader** | ✅ Working | Loads from export files, thread grouping, ~1.29M messages available |
+| **Fathom loader** | ✅ Working | API integration complete, 1,400+ meetings accessible with transcripts |
+| **GitHub loader** | ✅ Working | Via `gh` CLI - repos, issues, PRs, and source code |
+| **Google Drive loader** | ✅ Working | OAuth integration - Docs, Slides, Sheets extraction |
+| **Teamwork loader** | ✅ Working | API integration - 43 projects, tasks, messages |
+| **Harvest loader** | ✅ Working | API integration - 663 projects, 216K time entries |
+| **ChromaDB storage** | ✅ Working | Local vector store with 34.5K chunks from prior testing |
+| **Alert detection** | ✅ Working | Keyword-based risk/opportunity detection, 17 tests passing |
+| **CLI** | ✅ Working | `savas-kb` command with subcommands |
+| **FastAPI** | ✅ Working | REST API structure in place |
+
+### Data Source Access Verified
+
+| Source | API Access | Estimated Volume |
+|--------|------------|------------------|
+| **Slack** | ✅ Export available | ~1.29M messages, 945 channels |
+| **Fathom** | ✅ API working | 1,400+ meetings, ~50K chars/transcript |
+| **GitHub** | ✅ `gh` CLI auth | All savaslabs repos (code + issues + PRs) |
+| **Google Drive** | ✅ OAuth working | Docs, Slides, Sheets accessible |
+| **Teamwork** | ✅ API key working | 43 projects + tasks + messages |
+| **Harvest** | ✅ API key working | 663 projects, 216K time entries |
+
+### What Needs Work 🔧
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| **Data structure planning** | ⬜ Not started | Need to decide: chunking strategy, metadata schema, update patterns |
+| **Scale planning** | ⬜ Not started | Estimate ~800K chunks, ~5GB - ChromaDB vs pgvector decision |
+| **Ongoing update strategy** | ⬜ Not started | Webhooks vs polling, incremental vs full refresh |
+| **Full ingestion** | ⬜ Not started | Waiting on architecture decisions |
+| **Search testing** | ⬜ Not started | Need data ingested first |
+| **Web UI** | ⬜ Not started | |
+
+---
 
 ## AI Readiness Categories Coverage
 
@@ -20,16 +63,19 @@ Unified search interface across all Savas company data sources. Semantic search 
 
 ## Data Sources
 
-### Priority Order
-1. **Slack** - 700K+ messages - DONE via Secret Savas
-2. **Fathom** - Meeting transcripts - NEXT (critical for alerts use case)
-3. Google Drive - Proposals, task orders, contracts
-4. Teamwork - Project management, tasks, messages
-5. GitHub - Code, issues, PRs, documentation
-6. Harvest - Time tracking, project context
+### All Sources - Access Verified ✅
+
+| Source | Status | Volume | Loader |
+|--------|--------|--------|--------|
+| **Slack** | ✅ Ready | ~1.29M messages, 945 channels | `SlackLoader` - export files |
+| **Fathom** | ✅ Ready | 1,400+ meetings with transcripts | `FathomLoader` - API |
+| **GitHub** | ✅ Ready | All savaslabs repos | `GitHubLoader` - `gh` CLI |
+| **Google Drive** | ✅ Ready | Docs, Slides, Sheets | `DriveLoader` - OAuth |
+| **Teamwork** | ✅ Ready | 43 projects + tasks + messages | `TeamworkLoader` - API |
+| **Harvest** | ✅ Ready | 663 projects, 216K time entries | `HarvestLoader` - API |
 
 ### POC Scope
-Slack + Fathom = proof of concept. Enough to demonstrate value across all 4 use cases.
+Start with Slack + Fathom to validate search and alerts use cases, then expand.
 
 ## Use Cases
 
@@ -538,10 +584,12 @@ These are regex patterns, not simple string matches. `\b` ensures word boundarie
 ## Open Questions
 
 - [x] What queries would sales team actually use? → Load prospect context, get matching experience (UC3)
+- [x] How does Fathom webhook/API work for auto-processing? → API at `api.fathom.ai/external/v1`, provides meetings list + transcript + summary endpoints
+- [x] What metadata does Fathom provide? → Attendees (with email domains), meeting title, recording times, share URL, calendar invitees marked internal/external
 - [ ] How to handle conflicting information across sources?
 - [ ] What's the right UI/UX for busy team members?
-- [ ] How does Fathom webhook/API work for auto-processing?
-- [ ] What metadata does Fathom provide (attendees, meeting title, client tags)?
+- [ ] ChromaDB vs pgvector for production scale?
+- [ ] Incremental updates vs full re-index strategy?
 
 ## Related Work
 
@@ -551,10 +599,24 @@ These are regex patterns, not simple string matches. `\b` ensures word boundarie
 
 ## Next Steps
 
-- [ ] Research Fathom API/webhook capabilities
-- [ ] Set up local dev environment (Chroma or LanceDB for quick start)
-- [ ] Ingest sample Slack export + sample Fathom transcripts
-- [ ] Build basic search query → answer pipeline
-- [ ] Test with RIF sample queries
+### Completed ✅
+- [x] Research Fathom API/webhook capabilities → API working, 1,400+ meetings accessible
+- [x] Set up local dev environment → ChromaDB + all loaders working
+- [x] Build data loaders for all 6 sources → All verified and tested
+- [x] Set up project structure with tests → 17 tests passing
+
+### Immediate - Architecture Planning
+- [ ] **Plan data structure** - chunking strategies per source, metadata schema, deduplication
+- [ ] **Plan scale approach** - ChromaDB for POC vs pgvector for production
+- [ ] **Plan update strategy** - webhooks vs polling, incremental vs full refresh, frequency
+
+### After Architecture Decisions
+- [ ] Run full ingestion for Slack + Fathom (POC sources)
+- [ ] Test search with RIF sample queries
+- [ ] Validate alert detection on real Fathom transcripts
+- [ ] Add remaining sources (GitHub, Drive, Teamwork, Harvest)
+
+### Future
 - [ ] Add Slack bot integration
+- [ ] Build web UI for search
 - [ ] Deploy to cloud for team access

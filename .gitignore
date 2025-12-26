@@ -1,0 +1,4 @@
+.env
+*.pyc
+/credentials.json
+/token.json
