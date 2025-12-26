@@ -3,6 +3,42 @@
 **Status:** Data Loaders Complete - Ready for Architecture Planning
 **Last Updated:** 2025-12-26
 
+---
+
+## ⚠️ IMPORTANT: Data Ingestion/Deletion Hold
+
+**DO NOT ingest or delete any data in ChromaDB (or any vector store) without explicit approval.**
+
+### Current State
+- `data/chroma/` contains **34.5K test chunks** from `#general` Slack channel (2015-2021)
+- This was created during initial pipeline testing - far too much data for a "test"
+- **Do not delete this data** - leave it until explicitly told to clear it
+- It may be useful for testing search/queries even if we ultimately re-ingest differently
+
+### Why the Hold
+1. **Architecture decisions pending** - We haven't decided: ChromaDB vs pgvector, chunking strategies, metadata schema, update patterns
+2. **Embedding model lock-in** - Once you embed with a model, you can't mix embeddings from different models. Changing models = re-embed everything.
+3. **Cost awareness** - Embeddings are cheap but not free. Re-embedding 800K+ chunks due to a schema change is wasteful.
+4. **Pipeline flexibility** - The goal is to make it easy to change decisions. Don't cement anything until we've thought it through.
+
+### Before Any Real Ingestion
+- [ ] Finalize chunking strategy per source
+- [ ] Finalize metadata schema (what fields, how to populate)
+- [ ] Decide vector DB (ChromaDB for POC is fine, but confirm)
+- [ ] Decide embedding model (currently `text-embedding-3-small`)
+- [ ] Plan incremental update strategy
+- [ ] Get explicit approval on whether to clear or keep existing test data
+
+### Testing Without Full Ingestion
+For pipeline testing, use **tiny samples** (10-50 items max):
+```python
+# Example: Test with just 10 messages
+chunks = slack_loader.load_channel("general", limit=10)
+store.add_chunks(chunks)
+```
+
+---
+
 ## Overview
 
 Unified search interface across all Savas company data sources. Semantic search + conversational interface + automated triggers.
@@ -21,7 +57,7 @@ Unified search interface across all Savas company data sources. Semantic search 
 | **Google Drive loader** | ✅ Working | OAuth integration - Docs, Slides, Sheets extraction |
 | **Teamwork loader** | ✅ Working | API integration - 43 projects, tasks, messages |
 | **Harvest loader** | ✅ Working | API integration - 663 projects, 216K time entries |
-| **ChromaDB storage** | ✅ Working | Local vector store with 34.5K chunks from prior testing |
+| **ChromaDB storage** | ✅ Working | Local vector store - **34.5K test chunks to be cleared** (see warning above) |
 | **Alert detection** | ✅ Working | Keyword-based risk/opportunity detection, 17 tests passing |
 | **CLI** | ✅ Working | `savas-kb` command with subcommands |
 | **FastAPI** | ✅ Working | REST API structure in place |
@@ -590,6 +626,7 @@ These are regex patterns, not simple string matches. `\b` ensures word boundarie
 - [ ] What's the right UI/UX for busy team members?
 - [ ] ChromaDB vs pgvector for production scale?
 - [ ] Incremental updates vs full re-index strategy?
+- [ ] **Pipeline flexibility** - How do we structure the pipeline so changing vector DB, embedding model, or chunking strategy doesn't require rewriting everything? (Current abstraction: `ChromaStore` class with simple interface)
 
 ## Related Work
 
