@@ -64,8 +64,8 @@ class OneOnOneRequest(BaseModel):
     days_back: int = 30
 
 
-@app.get("/")
-async def root():
+@app.get("/api/health")
+async def health():
     """Health check endpoint."""
     return {"status": "ok", "service": "savas-knowledge-base"}
 
