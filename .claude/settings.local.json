@@ -26,7 +26,19 @@
       "Bash(# The first project returned 70 tasks earlier - let''s check the Parliament project curl -s -u \"\"twp_dlSkAEBpa0r3INq1vEgVAKa45oEY:x\"\" \\\\ \"\"https://savaslabs.teamwork.com/projects.json\"\")",
       "Bash(xargs:*)",
       "Bash(uv sync:*)",
-      "Bash(source:*)"
+      "Bash(source:*)",
+      "WebFetch(domain:apidocs.teamwork.com)",
+      "Bash(gh api:*)",
+      "Bash(gh repo view:*)",
+      "Bash(npm create:*)",
+      "Bash(npm install:*)",
+      "Bash(npx tailwindcss:*)",
+      "Bash(npx tsc:*)",
+      "Bash(pkill:*)",
+      "Bash(npm run dev:*)",
+      "Bash(sqlite3:*)",
+      "Bash(SSH_KEY=~/.ssh/AWS-created-nov-27-2025.pem:*)",
+      "Bash(ssh:*)"
     ]
   }
 }
