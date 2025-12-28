@@ -40,7 +40,9 @@
       "Bash(SSH_KEY=~/.ssh/AWS-created-nov-27-2025.pem:*)",
       "Bash(ssh:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(wc:*)"
     ]
   }
 }
