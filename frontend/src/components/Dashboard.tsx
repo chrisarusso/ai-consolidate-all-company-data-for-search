@@ -102,13 +102,21 @@ export function Dashboard() {
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <h1 className="text-2xl font-bold text-gray-900">
-            Savas Knowledge Base
-          </h1>
-          <p className="text-gray-500 mt-1">
-            Unified search across company data sources
-          </p>
+        <div className="max-w-7xl mx-auto px-4 py-6 flex justify-between items-start">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">
+              Savas Knowledge Base
+            </h1>
+            <p className="text-gray-500 mt-1">
+              Unified search across company data sources
+            </p>
+          </div>
+          <a
+            href="/"
+            className="text-blue-600 hover:text-blue-800 text-sm flex items-center gap-1"
+          >
+            ← Back to Internal Tools
+          </a>
         </div>
       </header>
 
