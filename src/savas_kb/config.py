@@ -19,11 +19,12 @@ SLACK_DIR = DATA_DIR / "slack"
 FATHOM_DIR = DATA_DIR / "fathom"
 GITHUB_DIR = DATA_DIR / "github"
 DRIVE_DIR = DATA_DIR / "drive"
+GMAIL_DIR = DATA_DIR / "gmail"
 TEAMWORK_DIR = DATA_DIR / "teamwork"
 HARVEST_DIR = DATA_DIR / "harvest"
 
 # Ensure directories exist
-for dir_path in [DATA_DIR, CHROMA_DIR, SLACK_DIR, FATHOM_DIR, GITHUB_DIR, DRIVE_DIR, TEAMWORK_DIR, HARVEST_DIR]:
+for dir_path in [DATA_DIR, CHROMA_DIR, SLACK_DIR, FATHOM_DIR, GITHUB_DIR, DRIVE_DIR, GMAIL_DIR, TEAMWORK_DIR, HARVEST_DIR]:
     dir_path.mkdir(parents=True, exist_ok=True)
 
 # API Keys

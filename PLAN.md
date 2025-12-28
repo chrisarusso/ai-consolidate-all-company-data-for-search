@@ -1,7 +1,90 @@
 # Multi-Source Knowledge Base (Savas Unified Search)
 
-**Status:** Data Loaders Complete - Ready for Architecture Planning
-**Last Updated:** 2025-12-26
+**Status:** Dashboard Deployed - Adding Gmail Integration
+**Last Updated:** 2025-12-27
+
+---
+
+## Current State (Pick Up Here)
+
+### What's Live
+- **Dashboard:** https://internal.savaslabs.com/knowledge-base/ (requires Google OAuth)
+- **Backend:** FastAPI on port 8004, systemd service `knowledge-base`
+- **Data:**
+  - SQLite: 222K+ raw records (Teamwork, Harvest, Fathom, GitHub, Drive)
+  - ChromaDB: 34.5K Slack chunks from #general (embedded, searchable)
+
+### Raw Data in SQLite (`data/raw_data.db`)
+| Source | Records |
+|--------|---------|
+| Teamwork | 294 projects, 4,830 tasks, 614 messages |
+| Harvest | 164 clients, 663 projects, 216,577 time entries |
+| Fathom | 2 transcripts |
+| GitHub | 451 issues/PRs (savaslabs.com-website repo) |
+| Drive | 2 documents |
+
+### Next Up: Gmail Integration
+Adding Gmail as a data source via analytics@savaslabs.com:
+
+**Setup steps:**
+1. Delete `token.json` (current token doesn't have Gmail scope)
+2. Add Gmail scope to OAuth: `https://www.googleapis.com/auth/gmail.readonly`
+3. Re-authenticate (will prompt for Google login)
+
+**Implementation:**
+- [ ] Create `src/savas_kb/ingestion/gmail_loader.py` (model on `drive_loader.py`)
+- [ ] Add `GMAIL_DIR` to config.py ✅ (already added)
+- [ ] Add SQLite table `g_emails`:
+  ```sql
+  CREATE TABLE g_emails (
+      id TEXT PRIMARY KEY,
+      thread_id TEXT,
+      subject TEXT,
+      sender TEXT,
+      recipients TEXT,  -- JSON array
+      date DATETIME,
+      body_text TEXT,
+      body_html TEXT,
+      labels TEXT,  -- JSON array
+      has_attachments BOOLEAN,
+      fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+  ```
+- [ ] Add to ingest_raw.py script
+- [ ] Update /api/stats to include Gmail counts
+- [ ] Update dashboard to show Gmail card
+
+**Considerations:**
+- Use analytics@savaslabs.com as the mailbox
+- May want to filter by date range (emails go back years)
+- Consider excluding certain labels (spam, trash, promotions)
+- Thread grouping for context (like Slack threads)
+
+### Next Steps (After Gmail)
+1. **Make search work across all sources**
+   - Design chunking strategy per source
+   - Process SQLite raw data → ChromaDB embeddings
+   - Add search UI to dashboard
+
+2. **Alerts pipeline**
+   - Auto-detect risks/opportunities in Fathom transcripts
+   - Post to Slack when signals found
+
+3. **More data ingestion**
+   - More Fathom transcripts (currently only 2)
+   - GitHub code files (currently only issues)
+   - More Drive docs
+
+### Deploy Commands
+```bash
+# Local development
+cd frontend && npm run dev  # Frontend on :5173
+uv run uvicorn savas_kb.api.app:app --port 8000  # Backend on :8000
+
+# Deploy to production
+git add . && git commit -m "message" && git push github master
+./deploy.sh
+```
 
 ---
 
